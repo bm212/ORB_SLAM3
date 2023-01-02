@@ -8,19 +8,58 @@ ENDIF()
 
 MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
+
+# for M1
+# see https://stackoverflow.com/questions/52879026/cmake-cross-compile-on-macos-adds-macos-sdk-to-isysroot-in-flags-make
+# and https://stackoverflow.com/questions/65511230/how-do-i-use-cmake-on-os-x-target-the-new-arm-m1
+# need to run with -DCMAKE_APPLE_SILICON_PROCESSOR=arm64
+
+
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
 
-# MAC BOOST: brew info boost
-set(BOOST_INCLUDE /usr/local/Cellar/boost/1.80.0/include)
-set(BOOST_LIBS /usr/local/Cellar/boost/1.80.0/lib)
+# set up clang-specific stuff
+
+if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+  MESSAGE("Using Clang")
+  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE}")
+else()
+        MESSAGE("Not using CLANG!")
+        # clang doesn't like this setting
+        set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
+        set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
+endif()
+
+# M1 specific stuff
+# homebrew puts things in different places, depending:
+# on M1, it's in /opt/homebrew/
+# on intel, it's /usr/local/opt/boost
+# this also impacts openssl
+#see https://stackoverflow.com/questions/35477940/linking-statically-openssl-crypto-library-in-cmake
+
+
+IF ("${CMAKE_HOST_SYSTEM_PROCESSOR}" MATCHES "arm64")
+        MESSAGE("HOST: " ${CMAKE_HOST_SYSTEM_PROCESSOR})
+        set (BOOST_BASE /opt/homebrew)
+        # openssl is put in a strange place by homebrew
+        set (OPENSSL_ROOT_DIR /opt/homebrew/opt/openssl@3)
+ELSE()
+        MESSAGE("NOT ARM64")
+        set(BOOST_BASE /usr/local/opt/boost)
+        set (OPENSSL_ROOT_DIR /usr/local/opt/openssl@3)
+ENDIF()
+
+# these are used in the find_package Boost command later
+set(BOOST_INCLUDE ${BOOST_BASE}/include)        #should be BOOST_INCLUDEDIR?
+set(BOOST_LIBS ${BOOST_BASE}/lib)
+
+
 set(Pangolin_DIR ../Pangolin)
 
 # Check C++14 or C++0x support
 include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX11)
+CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX11)   
 CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
 if(COMPILER_SUPPORTS_CXX11)
    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
@@ -48,6 +87,9 @@ find_package(Eigen3 3.1.0 REQUIRED)
 find_package(Pangolin REQUIRED)
 find_package(realsense2)
 
+
+find_package(OpenSSL REQUIRED)
+
 include_directories(
 ${PROJECT_SOURCE_DIR}
 ${PROJECT_SOURCE_DIR}/include
@@ -55,7 +97,7 @@ ${PROJECT_SOURCE_DIR}/include/CameraModels
 ${PROJECT_SOURCE_DIR}/Thirdparty/Sophus
 ${EIGEN3_INCLUDE_DIR}
 ${Pangolin_INCLUDE_DIRS}
-/usr/local/opt/openssl@3/include
+${OPENSSL_ROOT_DIR}/include
 )
 
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
@@ -125,10 +167,6 @@ add_subdirectory(Thirdparty/g2o)
 # see https://stackoverflow.com/questions/65030391/how-to-build-and-link-boost-serialization-on-macos
 find_package(Boost COMPONENTS serialization REQUIRED)
 
-#see https://stackoverflow.com/questions/35477940/linking-statically-openssl-crypto-library-in-cmake
-#
-set (OPENSSL_ROOT_DIR /usr/local/opt/openssl@3)
-find_package(OpenSSL REQUIRED)
 
 target_link_libraries(${PROJECT_NAME}
 ${OpenCV_LIBS}
@@ -137,10 +175,8 @@ ${Pangolin_LIBRARIES}
 ${PROJECT_SOURCE_DIR}/Thirdparty/DBoW2/lib/libDBoW2.dylib
 ${PROJECT_SOURCE_DIR}/Thirdparty/g2o/lib/libg2o.dylib
 ${Boost_LIBRARIES}
-#-lboost_serialization
 OpenSSL::Crypto
-#-lcrypto
-/usr/local/opt/openssl@3/lib/libssl.dylib
+${OPENSSL_ROOT_DIR}/lib/libssl.dylib
 )
 
 # If RealSense SDK is found the library is added and its examples compiled
