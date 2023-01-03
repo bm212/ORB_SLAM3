@@ -44,3 +44,13 @@ mkdir -p build
 cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_BUILD_TYPE=Release ${EXTRA_CMAKE_ARGS}
 make -j4
+cd ..
+
+# this takes ages, so only do it if the binary vocab file doesn't exist
+if [ ! -f ./Vocabulary/ORBvoc.bin ]
+then
+  echo "Converting vocabulary to binary"
+  ./tools/bin_vocabulary
+else
+  echo "Vocabulary file already converted to binary."
+fi
