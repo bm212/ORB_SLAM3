@@ -437,6 +437,10 @@ protected:
   /// Words of the vocabulary (tree leaves)
   /// this condition holds: m_words[wid]->word_id == wid
   std::vector<Node*> m_words;
+
+  //! Block of descriptor memory with one row being the descriptor for a given node
+  // from https://github.com/shinsumicco/DBoW2/pull/8/files
+   cv::Mat m_descriptors;
   
 };
 
@@ -1484,6 +1488,7 @@ void TemplatedVocabulary<TDescriptor,F>::load(const std::string &filename)
 
 // --------------------------------------------------------------------------
 // this is really slow - reading the file is fast, but processing the data is not
+// see https://github.com/xdspacelab/openvslam/issues/91
 template<class TDescriptor, class F>
  bool TemplatedVocabulary<TDescriptor,F>::loadFromBinaryFile(const std::string &filename) {
    fstream f;
@@ -1502,6 +1507,10 @@ template<class TDescriptor, class F>
    m_nodes.clear();
    m_nodes.resize(nb_nodes+1);
    m_nodes[0].id = 0;
+
+//from https://github.com/shinsumicco/DBoW2/pull/8/files
+   m_descriptors = cv::Mat(nb_nodes+1, F::L, CV_8U);
+
    char buf[size_node]; int nid = 1;
    cout << "reading " << nb_nodes << " nodes" << endl;
    int nodeCount=0;
@@ -1519,7 +1528,11 @@ template<class TDescriptor, class F>
  	m_nodes[nid].parent = *ptr;
  	//m_nodes[nid].parent = *(const int*)buf;
  	m_nodes[m_nodes[nid].parent].children.push_back(nid);
- 	m_nodes[nid].descriptor = cv::Mat(1, F::L, CV_8U);
+ 	
+  // from https://github.com/shinsumicco/DBoW2/pull/8/files
+  //m_nodes[nid].descriptor = cv::Mat(1, F::L, CV_8U);
+   m_nodes.at(nid).descriptor = m_descriptors.row(nid);
+
  	memcpy(m_nodes[nid].descriptor.data, buf+4, F::L);
  	m_nodes[nid].weight = *(float*)(buf+4+F::L);
  	if (buf[8+F::L]) { // is leaf
